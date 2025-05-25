@@ -1,0 +1,29 @@
+# Виртуальное окружение
+venv/
+env/
+
+# Секретные файлы
+.env
+.env.local
+.env.production
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# База данных
+*.db
+*.sqlite3
+
+# Логи
+*.log
+
+# Загруженные файлы (в продакшене будут на CDN)
+static/uploads/
+
+# IDE файлы
+.vscode/
+.idea/
+*.swp
