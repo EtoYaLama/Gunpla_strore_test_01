@@ -1,185 +1,127 @@
 import os
 import uuid
-import shutil
 from typing import List, Optional
-from fastapi import UploadFile, HTTPException, status
+from fastapi import UploadFile, HTTPException
 from PIL import Image
-from app.config import settings
+import aiofiles
 
 
 class FileService:
+    def __init__(self):
+        self.upload_dir = "app/static/uploads/products"
+        self.allowed_extensions = {".jpg", ".jpeg", ".png", ".webp"}
+        self.max_file_size = 5 * 1024 * 1024  # 5MB
+        self.image_sizes = {
+            "thumbnail": (300, 300),
+            "medium": (600, 600),
+            "large": (1200, 1200)
+        }
 
-    @staticmethod
-    def get_allowed_extensions():
-        """Получить разрешенные расширения файлов"""
-        return settings.ALLOWED_EXTENSIONS or ['jpg', 'jpeg', 'png', 'webp']
+        # Создаем директории если их нет
+        os.makedirs(self.upload_dir, exist_ok=True)
+        for size in self.image_sizes.keys():
+            os.makedirs(f"{self.upload_dir}/{size}", exist_ok=True)
 
-    @staticmethod
-    def validate_file(file: UploadFile) -> None:
-        """Валидация загружаемого файла"""
-        # Проверка размера файла
-        if file.size and file.size > settings.MAX_FILE_SIZE:
-            raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail=f"Файл слишком большой. Максимальный размер: {settings.MAX_FILE_SIZE // (1024 * 1024)}MB"
-            )
+    async def save_product_images(self, files: List[UploadFile]) -> List[str]:
+        """Сохраняет изображения товара и возвращает пути к файлам"""
+        if not files:
+            return []
 
-        # Проверка расширения файла
-        if file.filename:
-            extension = file.filename.split('.')[-1].lower()
-            if extension not in FileService.get_allowed_extensions():
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Неподдерживаемый тип файла. Разрешены: {', '.join(FileService.get_allowed_extensions())}"
-                )
-
-    @staticmethod
-    def generate_filename(original_filename: str) -> str:
-        """Генерация уникального имени файла"""
-        extension = original_filename.split('.')[-1].lower()
-        unique_name = f"{uuid.uuid4()}.{extension}"
-        return unique_name
-
-    @staticmethod
-    def ensure_directory_exists(directory: str) -> None:
-        """Создание директории если она не существует"""
-        os.makedirs(directory, exist_ok=True)
-
-    @staticmethod
-    async def save_product_image(file: UploadFile, is_main: bool = False) -> str:
-        """
-        Сохранение изображения товара
-
-        Args:
-            file: Загружаемый файл
-            is_main: Является ли изображение основным
-
-        Returns:
-            str: Путь к сохраненному файлу
-        """
-        # Валидация файла
-        FileService.validate_file(file)
-
-        # Генерация имени файла
-        filename = FileService.generate_filename(file.filename)
-
-        # Создание пути для сохранения
-        upload_dir = os.path.join(settings.UPLOAD_DIR, "products")
-        FileService.ensure_directory_exists(upload_dir)
-
-        file_path = os.path.join(upload_dir, filename)
-
-        try:
-            # Сохранение файла
-            with open(file_path, "wb") as buffer:
-                shutil.copyfileobj(file.file, buffer)
-
-            # Обработка изображения (изменение размера, оптимизация)
-            FileService.process_image(file_path, is_main)
-
-            # Возвращаем относительный путь для БД
-            return f"products/{filename}"
-
-        except Exception as e:
-            # Удаляем файл в случае ошибки
-            if os.path.exists(file_path):
-                os.remove(file_path)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Ошибка при сохранении файла: {str(e)}"
-            )
-
-    @staticmethod
-    def process_image(file_path: str, is_main: bool = False) -> None:
-        """
-        Обработка изображения (изменение размера, оптимизация)
-
-        Args:
-            file_path: Путь к файлу
-            is_main: Является ли изображение основным
-        """
-        try:
-            with Image.open(file_path) as img:
-                # Конвертируем в RGB если нужно
-                if img.mode in ('RGBA', 'LA', 'P'):
-                    img = img.convert('RGB')
-
-                # Определяем размеры в зависимости от типа изображения
-                if is_main:
-                    # Основное изображение - больше размер
-                    max_size = (800, 800)
-                else:
-                    # Дополнительные изображения - меньше размер
-                    max_size = (600, 600)
-
-                # Изменяем размер с сохранением пропорций
-                img.thumbnail(max_size, Image.Resampling.LANCZOS)
-
-                # Сохраняем с оптимизацией
-                img.save(file_path, optimize=True, quality=85)
-
-        except Exception as e:
-            print(f"Ошибка обработки изображения {file_path}: {str(e)}")
-
-    @staticmethod
-    def delete_file(file_path: str) -> bool:
-        """
-        Удаление файла
-
-        Args:
-            file_path: Относительный путь к файлу
-
-        Returns:
-            bool: True если файл удален успешно
-        """
-        try:
-            full_path = os.path.join(settings.UPLOAD_DIR, file_path)
-            if os.path.exists(full_path):
-                os.remove(full_path)
-                return True
-            return False
-        except Exception as e:
-            print(f"Ошибка удаления файла {file_path}: {str(e)}")
-            return False
-
-    @staticmethod
-    def get_file_url(file_path: Optional[str]) -> Optional[str]:
-        """
-        Получение URL файла для фронтенда
-
-        Args:
-            file_path: Относительный путь к файлу
-
-        Returns:
-            str: URL файла или None
-        """
-        if not file_path:
-            return None
-
-        return f"/static/uploads/{file_path}"
-
-    @staticmethod
-    async def save_multiple_images(files: List[UploadFile]) -> List[str]:
-        """
-        Сохранение нескольких изображений
-
-        Args:
-            files: Список файлов для загрузки
-
-        Returns:
-            List[str]: Список путей к сохраненным файлам
-        """
         saved_files = []
 
-        try:
-            for file in files:
-                file_path = await FileService.save_product_image(file, is_main=False)
-                saved_files.append(file_path)
+        for file in files:
+            # Валидация файла
+            if not self._validate_file(file):
+                continue
 
-            return saved_files
+            # Генерируем уникальное имя файла
+            file_extension = os.path.splitext(file.filename)[1].lower()
+            unique_filename = f"{str(uuid.uuid4())}{file_extension}"
 
-        except Exception as e:
-            # В случае ошибки удаляем уже загруженные файлы
-            for file_path in saved_files:
-                FileService.delete_file(file_path)
-            raise e
+            try:
+                # Читаем файл
+                content = await file.read()
+
+                # Сохраняем оригинал и создаем разные размеры
+                file_paths = await self._save_with_resize(content, unique_filename)
+                saved_files.append(unique_filename)
+
+            except Exception as e:
+                print(f"Ошибка при сохранении файла {file.filename}: {e}")
+                continue
+
+        return saved_files
+
+    def _validate_file(self, file: UploadFile) -> bool:
+        """Валидирует загружаемый файл"""
+        if not file.filename:
+            return False
+
+        # Проверяем расширение
+        file_extension = os.path.splitext(file.filename)[1].lower()
+        if file_extension not in self.allowed_extensions:
+            return False
+
+        return True
+
+    async def _save_with_resize(self, content: bytes, filename: str) -> dict:
+        """Сохраняет файл в разных размерах"""
+        file_paths = {}
+
+        # Открываем изображение
+        image = Image.open(io.BytesIO(content))
+
+        # Конвертируем в RGB если нужно
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+
+        # Сохраняем в разных размерах
+        for size_name, (width, height) in self.image_sizes.items():
+            # Ресайзим с сохранением пропорций
+            resized_image = self._resize_image(image, width, height)
+
+            # Путь к файлу
+            file_path = f"{self.upload_dir}/{size_name}/{filename}"
+
+            # Сохраняем
+            resized_image.save(file_path, "JPEG", quality=85, optimize=True)
+            file_paths[size_name] = f"/static/uploads/products/{size_name}/{filename}"
+
+        return file_paths
+
+    def _resize_image(self, image: Image.Image, max_width: int, max_height: int) -> Image.Image:
+        """Изменяет размер изображения с сохранением пропорций"""
+        # Вычисляем новые размеры
+        width, height = image.size
+        ratio = min(max_width / width, max_height / height)
+
+        if ratio < 1:
+            new_width = int(width * ratio)
+            new_height = int(height * ratio)
+            image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+
+        return image
+
+    def delete_product_images(self, filenames: List[str]):
+        """Удаляет изображения товара"""
+        for filename in filenames:
+            for size_name in self.image_sizes.keys():
+                file_path = f"{self.upload_dir}/{size_name}/{filename}"
+                try:
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                except Exception as e:
+                    print(f"Ошибка при удалении файла {file_path}: {e}")
+
+    def get_image_url(self, filename: str, size: str = "medium") -> str:
+        """Возвращает URL изображения"""
+        if not filename:
+            return "/static/images/no-image.jpg"  # placeholder
+
+        return f"/static/uploads/products/{size}/{filename}"
+
+
+# Импорт для работы с байтами
+import io
+
+file_service = FileService()
