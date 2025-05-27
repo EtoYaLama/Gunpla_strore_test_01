@@ -2,7 +2,6 @@ from typing import List, Optional, Tuple, Type
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_, desc, asc, func
 
-from app.models import Product
 from app.models.product import Product
 from app.schemas.product import ProductCreate, ProductUpdate, ProductFilter
 from app.services.file_service import FileService

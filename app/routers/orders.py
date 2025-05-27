@@ -9,11 +9,7 @@ from decimal import Decimal
 from app.database import get_db
 from app.models.user import User
 from app.models.product import Product
-from app.models.order import Cart, Order, OrderItem, OrderStatus
-from app.schemas.order import (
-    CartItemCreate, CartItemUpdate, CartItemResponse, CartResponse,
-    OrderCreate, OrderResponse, OrderUpdate, OrderListResponse, OrderStatsResponse
-)
+from app.models.order import Cart
 from ..utils.dependencies import get_current_user, get_current_admin_user
 from ..services.file_service import file_service
 
@@ -30,9 +26,7 @@ async def get_cart(
     """Получение корзины пользователя"""
 
     # Получаем элементы корзины с информацией о товарах
-    cart_items = db.query(Cart, Product).join(
-        Product, Cart.product_id == Product.id
-    ).filter(Cart.user_id == current_user.id).all()
+    cart_items = db.query(Cart, Product).join(Product, Cart.product_id == Product.id).filter(Cart.user_id == current_user.id).all()
 
     items_response = []
     total_amount = Decimal('0')
