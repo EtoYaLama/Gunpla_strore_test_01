@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from app.routers import auth
+from app.routers import auth, orders, products, reviews
 from app.config import settings
 
 # Создание приложения FastAPI
@@ -11,10 +11,13 @@ app = FastAPI(
 )
 
 # Подключение статических файлов
-# app.mount("/static", StaticFiles(directory="app/static"), name="static")
+# app.mount("/node", StaticFiles(directory="app/static"), name="static")
 
 # Подключение роутеров
 app.include_router(auth.router, prefix="/api")
+app.include_router(orders.router, prefix="/api")
+app.include_router(products.router, prefix="/api")
+app.include_router(reviews.router, prefix="/api")
 
 @app.get("/")
 async def root():

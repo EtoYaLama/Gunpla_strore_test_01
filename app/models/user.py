@@ -24,3 +24,8 @@ class User(BaseModel):
 
     def __repr__(self):
         return f"<User(username='{self.username}', email='{self.email}')>"
+
+    @property
+    def display_name(self):
+        """Отображаемое имя пользователя"""
+        return self.full_name or self.username

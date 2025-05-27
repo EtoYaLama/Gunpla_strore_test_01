@@ -1,0 +1,511 @@
+<!-- Секция отзывов для страницы товара -->
+<div class="reviews-section mt-5">
+    <div class="row">
+        <div class="col-12">
+            <h3>Отзывы покупателей</h3>
+
+            <!-- Статистика отзывов -->
+            <div class="review-stats bg-light p-4 rounded mb-4">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="rating-display me-3">
+                                <span class="h2 mb-0" id="average-rating">{{ product.average_rating or 0 }}</span>
+                                <div class="stars">
+                                    {% for i in range(1, 6) %}
+                                        <i class="fas fa-star {% if i <= (product.average_rating or 0) %}text-warning{% else %}text-muted{% endif %}"></i>
+                                    {% endfor %}
+                                </div>
+                                <small class="text-muted">{{ product.total_reviews or 0 }} отзывов</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="rating-breakdown" id="rating-breakdown">
+                            <!-- Заполняется через JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Фильтры отзывов -->
+            <div class="review-filters mb-4">
+                <div class="btn-group" role="group">
+                    <button type="button" class="btn btn-outline-primary active" data-rating="all">Все отзывы</button>
+                    <button type="button" class="btn btn-outline-primary" data-rating="5">5 звезд</button>
+                    <button type="button" class="btn btn-outline-primary" data-rating="4">4 звезды</button>
+                    <button type="button" class="btn btn-outline-primary" data-rating="3">3 звезды</button>
+                    <button type="button" class="btn btn-outline-primary" data-rating="2">2 звезды</button>
+                    <button type="button" class="btn btn-outline-primary" data-rating="1">1 звезда</button>
+                </div>
+            </div>
+
+            <!-- Форма добавления отзыва -->
+            {% if current_user %}
+            <div class="add-review-section mb-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Оставить отзыв</h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="review-form" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <label class="form-label">Ваша оценка *</label>
+                                <div class="rating-input">
+                                    {% for i in range(1, 6) %}
+                                        <input type="radio" name="rating" value="{{ i }}" id="star{{ i }}" required>
+                                        <label for="star{{ i }}" class="star-label">
+                                            <i class="fas fa-star"></i>
+                                        </label>
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="comment" class="form-label">Комментарий</label>
+                                <textarea class="form-control" id="comment" name="comment" rows="4"
+                                         placeholder="Поделитесь своим мнением о товаре..."></textarea>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="images" class="form-label">Фотографии (до 5 штук)</label>
+                                <input type="file" class="form-control" id="images" name="images"
+                                       multiple accept="image/*" max="5">
+                                <div class="form-text">Поддерживаются форматы: JPG, PNG, GIF (макс. 5 файлов)</div>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary">Отправить отзыв</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="alert alert-info mb-4">
+                <a href="/auth/login" class="alert-link">Войдите в аккаунт</a>, чтобы оставить отзыв
+            </div>
+            {% endif %}
+
+            <!-- Список отзывов -->
+            <div id="reviews-list">
+                <!-- Заполняется через JS -->
+            </div>
+
+            <!-- Пагинация -->
+            <nav aria-label="Reviews pagination">
+                <ul class="pagination justify-content-center" id="reviews-pagination">
+                    <!-- Заполняется через JS -->
+                </ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно для просмотра изображений -->
+<div class="modal fade" id="imageModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Фото из отзыва</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center">
+                <img id="modalImage" src="" class="img-fluid" alt="Review image">
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Стили для рейтинга */
+.rating-input {
+    display: flex;
+    flex-direction: row-reverse;
+    justify-content: flex-end;
+    gap: 5px;
+}
+
+.rating-input input[type="radio"] {
+    display: none;
+}
+
+.star-label {
+    cursor: pointer;
+    font-size: 1.5rem;
+    color: #ddd;
+    transition: color 0.2s;
+}
+
+.rating-input input[type="radio"]:checked ~ .star-label,
+.rating-input .star-label:hover,
+.rating-input .star-label:hover ~ .star-label {
+    color: #ffc107;
+}
+
+.rating-breakdown .progress {
+    height: 8px;
+}
+
+.review-item {
+    border-bottom: 1px solid #dee2e6;
+    padding: 1.5rem 0;
+}
+
+.review-item:last-child {
+    border-bottom: none;
+}
+
+.review-images {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+}
+
+.review-image {
+    width: 80px;
+    height: 80px;
+    object-fit: cover;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.review-image:hover {
+    transform: scale(1.1);
+}
+
+.helpful-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.helpful-btn {
+    border: none;
+    background: none;
+    color: #6c757d;
+    font-size: 0.9rem;
+    cursor: pointer;
+    padding: 5px 10px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.helpful-btn:hover {
+    background-color: #f8f9fa;
+}
+
+.helpful-btn.active {
+    background-color: #e7f3ff;
+    color: #0066cc;
+}
+
+.review-date {
+    color: #6c757d;
+    font-size: 0.9rem;
+}
+
+.reviewer-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.reviewer-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: #6c757d;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let currentPage = 1;
+    let currentRating = 'all';
+    const productId = '{{ product.id }}';
+
+    // Загрузка статистики отзывов
+    loadReviewStats();
+
+    // Загрузка отзывов
+    loadReviews(1, currentRating);
+
+    // Обработчик фильтров
+    document.querySelectorAll('[data-rating]').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelector('.review-filters .btn.active').classList.remove('active');
+            this.classList.add('active');
+            currentRating = this.dataset.rating;
+            loadReviews(1, currentRating);
+        });
+    });
+
+    // Обработчик формы добавления отзыва
+    const reviewForm = document.getElementById('review-form');
+    if (reviewForm) {
+        reviewForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            await submitReview();
+        });
+    }
+
+    async function loadReviewStats() {
+        try {
+            const response = await fetch(`/api/reviews/stats/${productId}`);
+            const stats = await response.json();
+
+            document.getElementById('average-rating').textContent = stats.average_rating.toFixed(1);
+
+            // Обновляем breakdown
+            const breakdown = document.getElementById('rating-breakdown');
+            breakdown.innerHTML = '';
+
+            for (let i = 5; i >= 1; i--) {
+                const count = stats.rating_distribution[i] || 0;
+                const percentage = stats.total_reviews > 0 ? (count / stats.total_reviews * 100) : 0;
+
+                breakdown.innerHTML += `
+                    <div class="d-flex align-items-center mb-1">
+                        <span class="me-2">${i} звезд</span>
+                        <div class="progress flex-grow-1 me-2">
+                            <div class="progress-bar bg-warning" style="width: ${percentage}%"></div>
+                        </div>
+                        <span class="text-muted">${count}</span>
+                    </div>
+                `;
+            }
+        } catch (error) {
+            console.error('Ошибка загрузки статистики отзывов:', error);
+        }
+    }
+
+    async function loadReviews(page = 1, rating = 'all') {
+        try {
+            let url = `/api/reviews/?page=${page}&size=10&product_id=${productId}`;
+            if (rating !== 'all') {
+                url += `&rating_filter=${rating}`;
+            }
+
+            const response = await fetch(url);
+            const data = await response.json();
+
+            displayReviews(data.reviews);
+            displayPagination(data);
+
+        } catch (error) {
+            console.error('Ошибка загрузки отзывов:', error);
+        }
+    }
+
+    function displayReviews(reviews) {
+        const container = document.getElementById('reviews-list');
+
+        if (reviews.length === 0) {
+            container.innerHTML = '<p class="text-muted">Отзывов пока нет. Будьте первым!</p>';
+            return;
+        }
+
+        container.innerHTML = reviews.map(review => `
+            <div class="review-item">
+                <div class="reviewer-info">
+                    <div class="reviewer-avatar">
+                        ${review.user.username.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                        <strong>${review.user.full_name || review.user.username}</strong>
+                        <div class="review-date">${formatDate(review.created_at)}</div>
+                    </div>
+                    <div class="ms-auto">
+                        <div class="stars">
+                            ${generateStars(review.rating)}
+                        </div>
+                    </div>
+                </div>
+
+                ${review.comment ? `<p class="review-comment">${review.comment}</p>` : ''}
+
+                ${review.images && review.images.length > 0 ? `
+                    <div class="review-images">
+                        ${review.images.map(img => `
+                            <img src="/static/${img}" class="review-image"
+                                 onclick="showImageModal('/static/${img}')" alt="Review image">
+                        `).join('')}
+                    </div>
+                ` : ''}
+
+                <div class="helpful-buttons">
+                    <button class="helpful-btn ${review.user_helpful_vote === true ? 'active' : ''}"
+                            onclick="voteHelpful('${review.id}', true)">
+                        <i class="fas fa-thumbs-up"></i> Полезно (${review.helpful_count || 0})
+                    </button>
+                    <button class="helpful-btn ${review.user_helpful_vote === false ? 'active' : ''}"
+                            onclick="voteHelpful('${review.id}', false)">
+                        <i class="fas fa-thumbs-down"></i> Не полезно (${review.not_helpful_count || 0})
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function displayPagination(data) {
+        const container = document.getElementById('reviews-pagination');
+
+        if (data.pages <= 1) {
+            container.innerHTML = '';
+            return;
+        }
+
+        let pagination = '';
+
+        // Предыдущая страница
+        if (data.page > 1) {
+            pagination += `
+                <li class="page-item">
+                    <a class="page-link" href="#" onclick="changePage(${data.page - 1})">Предыдущая</a>
+                </li>
+            `;
+        }
+
+        // Номера страниц
+        for (let i = 1; i <= data.pages; i++) {
+            if (i === data.page || (i <= 3) || (i >= data.pages - 2) || (Math.abs(i - data.page) <= 1)) {
+                pagination += `
+                    <li class="page-item ${i === data.page ? 'active' : ''}">
+                        <a class="page-link" href="#" onclick="changePage(${i})">${i}</a>
+                    </li>
+                `;
+            } else if ((i === 4 && data.page > 5) || (i === data.pages - 3 && data.page < data.pages - 4)) {
+                pagination += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+            }
+        }
+
+        // Следующая страница
+        if (data.page < data.pages) {
+            pagination += `
+                <li class="page-item">
+                    <a class="page-link" href="#" onclick="changePage(${data.page + 1})">Следующая</a>
+                </li>
+            `;
+        }
+
+        container.innerHTML = pagination;
+    }
+
+    async function submitReview() {
+        const form = document.getElementById('review-form');
+        const formData = new FormData(form);
+
+        try {
+            // Сначала создаем отзыв
+            const reviewData = {
+                product_id: productId,
+                rating: parseInt(formData.get('rating')),
+                comment: formData.get('comment') || null
+            };
+
+            const response = await fetch('/api/reviews/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                },
+                body: JSON.stringify(reviewData)
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Ошибка создания отзыва');
+            }
+
+            const review = await response.json();
+
+            // Если есть изображения, загружаем их
+            const images = formData.getAll('images').filter(file => file.size > 0);
+            if (images.length > 0) {
+                const imageFormData = new FormData();
+                images.forEach(image => imageFormData.append('images', image));
+
+                await fetch(`/api/reviews/${review.id}/images`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                    },
+                    body: imageFormData
+                });
+            }
+
+            // Обновляем отзывы и статистику
+            await loadReviewStats();
+            await loadReviews(1, currentRating);
+
+            // Очищаем форму
+            form.reset();
+            document.querySelectorAll('.rating-input .star-label').forEach(label => {
+                label.style.color = '#ddd';
+            });
+
+            alert('Отзыв успешно добавлен!');
+
+        } catch (error) {
+            alert('Ошибка: ' + error.message);
+        }
+    }
+
+    window.changePage = function(page) {
+        currentPage = page;
+        loadReviews(page, currentRating);
+    };
+
+    window.voteHelpful = async function(reviewId, isHelpful) {
+        try {
+            const response = await fetch(`/api/reviews/${reviewId}/helpful`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                },
+                body: JSON.stringify({ is_helpful: isHelpful })
+            });
+
+            if (!response.ok) {
+                throw new Error('Ошибка голосования');
+            }
+
+            // Перезагружаем отзывы
+            loadReviews(currentPage, currentRating);
+
+        } catch (error) {
+            alert('Для голосования необходимо войти в аккаунт');
+        }
+    };
+
+    window.showImageModal = function(imageSrc) {
+        document.getElementById('modalImage').src = imageSrc;
+        new bootstrap.Modal(document.getElementById('imageModal')).show();
+    };
+
+    function generateStars(rating) {
+        let stars = '';
+        for (let i = 1; i <= 5; i++) {
+            stars += `<i class="fas fa-star ${i <= rating ? 'text-warning' : 'text-muted'}"></i>`;
+        }
+        return stars;
+    }
+
+    function formatDate(dateString) {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('ru-RU', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+    }
+});
+</script>

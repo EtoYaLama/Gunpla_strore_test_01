@@ -43,3 +43,18 @@ class Product(BaseModel):
 
     def __repr__(self):
         return f"<Product(name='{self.name}', grade='{self.grade.value}')>"
+
+    @property
+    def is_in_stock(self):
+        """Проверка наличия на складе"""
+        return self.in_stock > 0
+
+    @property
+    def rating_stars(self):
+        """Количество звезд для отображения (1-5)"""
+        return round(float(self.average_rating or 0))
+
+    @property
+    def formatted_price(self):
+        """Отформатированная цена"""
+        return f"{self.price:,.0f}".replace(",", " ")
