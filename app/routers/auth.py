@@ -19,7 +19,7 @@ async def register_user(user: UserCreate, db: Session = Depends(get_db)):
     Регистрация нового пользователя
     """
     # Проверяем, что пользователь с таким email не существует
-    if AuthService.get_user_by_email(db, email=user.email):
+    if AuthService.get_user_by_email(db, email=User.email):
         raise AuthException.USER_ALREADY_EXISTS
 
     # Проверяем, что username не занят
@@ -29,7 +29,7 @@ async def register_user(user: UserCreate, db: Session = Depends(get_db)):
     # Создаем пользователя
     db_user = AuthService.create_user(
         db=db,
-        email=user.email,
+        email=User.email,
         username=user.username,
         password=user.password,
         full_name=user.full_name

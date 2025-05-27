@@ -1,99 +1,105 @@
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
 import uuid
 
-
+''' Модель отзыва '''
 class ReviewBase(BaseModel):
-    rating: int = Field(..., ge=1, le=5, description="Рейтинг от 1 до 5 звезд")
-    comment: Optional[str] = Field(None, max_length=2000, description="Текст отзыва")
+    rating: int = Field(..., ge=1, le=5, description='Рейтинг от 1 до 5 звезд')
+    comment: Optional[str] = Field(None, max_length=2000, description='Текст отзыва')
 
 
+''' Модель создания отзыва '''
 class ReviewCreate(ReviewBase):
-    product_id: uuid.UUID
+    product_id: uuid.UUID = Field(..., description='Идентификатор отзыва')
 
 
+''' Модель обновления отзыва '''
 class ReviewUpdate(BaseModel):
-    rating: Optional[int] = Field(None, ge=1, le=5)
-    comment: Optional[str] = Field(None, max_length=2000)
-    is_approved: Optional[bool] = None
-    is_hidden: Optional[bool] = None
+    rating: Optional[int] = Field(None, ge=1, le=5, description='Рейтинг от 1 до 5 звезд')
+    comment: Optional[str] = Field(None, max_length=2000, description='Текст отзыва')
+    is_approved: Optional[bool] = Field(None, description='Настройка модерации отзыва (Одобрен)')
+    is_hidden: Optional[bool] = Field(None, description='Настройка модерации отзыва (Не одобрен)')
 
 
+''' Модель загрузки изображений к отзыву '''
 class ReviewImageUpload(BaseModel):
-    """Схема для загрузки изображений к отзыву"""
-    review_id: uuid.UUID
+    review_id: uuid.UUID = Field(..., description='Идентификатор отзыва, к которому добавляется изображение')
 
 
+''' Краткая информация о пользователе в отзыве '''
 class UserInReview(BaseModel):
-    """Пользователь в отзыве (краткая информация)"""
-    id: uuid.UUID
-    username: str
-    full_name: Optional[str] = None
+    id: uuid.UUID = Field(..., description='Идентификатор пользователя')
+    username: str = Field(..., description='UserName пользователя')
+    full_name: Optional[str] = Field(None, description='Полное имя пользователя (Опционально)')
 
+    ''' Берем информацию насчет пользователя '''
     class Config:
         from_attributes = True
 
 
+''' Модель содержит краткую информацию о продукте '''
 class ProductInReview(BaseModel):
-    """Товар в отзыве (краткая информация)"""
-    id: uuid.UUID
-    name: str
-    main_image: Optional[str] = None
+    id: uuid.UUID = Field(..., description='уникальный идентификатор отзыва')
+    name: str = Field(..., description='Название товара')
+    main_image: Optional[str] = Field(None, description='Необязательная ссылка на главное изображение товара')
 
     class Config:
         from_attributes = True
 
 
+''' Полный отзыв '''
 class Review(ReviewBase):
-    id: uuid.UUID
-    user_id: uuid.UUID
-    product_id: uuid.UUID
-    images: List[str] = []
-    is_approved: bool = True
-    is_hidden: bool = False
-    created_at: datetime
-    updated_at: datetime
+    id: uuid.UUID = Field(..., description='Уникальный идентификатор отзыва')
+    user_id: uuid.UUID = Field(..., description='Привязка с пользователем')
+    product_id: uuid.UUID = Field(..., description='Привязка с продуктом')
+    images: List[str] = Field(None, description='Список URL изображений, связанных с отзывом')
+    is_approved: bool = Field(True, description='Настройка модерации отзыва (Одобрен)')
+    is_hidden: bool = Field(False, description='Настройка модерации отзыва (Не одобрен)')
+    created_at: datetime = Field(..., description='Время создания комментария')
+    updated_at: datetime = Field(..., description='Время обновления комментария')
 
-    # Relationships
-    user: Optional[UserInReview] = None
-    product: Optional[ProductInReview] = None
+    ''' UserInReview, ProductInReview '''
+    user: Optional[UserInReview] = Field(None, description='Информация о пользователе')
+    product: Optional[ProductInReview] = Field(None, description='Информация о продукте')
 
-    # Calculated fields
-    helpful_count: Optional[int] = 0
-    not_helpful_count: Optional[int] = 0
-    user_helpful_vote: Optional[bool] = None  # для текущего пользователя
+    ''' Дополнительные поля '''
+    helpful_count: Optional[int] = Field(0, description='Лайк')
+    not_helpful_count: Optional[int] = Field(0, description='Дизлайк')
+    user_helpful_vote: Optional[bool] = Field(None, description='Оценка текущего пользователя')
 
     class Config:
         from_attributes = True
 
 
+''' Список пользователей с пагинацией '''
 class ReviewList(BaseModel):
-    """Список отзывов с пагинацией"""
-    reviews: List[Review]
-    total: int
-    page: int
-    size: int
-    pages: int
+    reviews: List[Review] = Field(..., description='Список объектов')
+    total: int = Field(..., description='Общее количество отзывов')
+    page: int = Field(..., description='Текущая страница')
+    size: int = Field(..., description='Отзывов на странице')
+    pages: int = Field(..., description='Общее количество страниц')
 
 
+''' Статистика отзывов '''
 class ReviewStats(BaseModel):
-    """Статистика отзывов для товара"""
-    total_reviews: int
-    average_rating: float
-    rating_distribution: dict  # {1: 5, 2: 10, 3: 15, 4: 20, 5: 25}
+    total_reviews: int = Field(..., description='Общее количество отзывов')
+    average_rating: float = Field(..., description='Средний рейтинг отзывов')
+    rating_distribution: dict = Field(..., description='Словарь с распределением отзывов')
 
 
+''' Схема голосов за полезность '''
 class ReviewHelpfulCreate(BaseModel):
-    is_helpful: bool
+    is_helpful: bool = Field(..., description='Используется для запроса добавления голоса за полезность')
 
 
+''' Схема голосов за полезность '''
 class ReviewHelpful(BaseModel):
-    id: uuid.UUID
-    review_id: uuid.UUID
-    user_id: uuid.UUID
-    is_helpful: bool
-    created_at: datetime
+    id: uuid.UUID = Field(..., description='ID')
+    review_id: uuid.UUID = Field(..., description='ID комментария')
+    user_id: uuid.UUID = Field(..., description='ID пользователя')
+    is_helpful: bool = Field(..., description='Лайки')
+    created_at: datetime = Field(..., description='Время создания')
 
     class Config:
         from_attributes = True

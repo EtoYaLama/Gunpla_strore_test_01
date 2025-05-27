@@ -5,7 +5,7 @@ from typing import List, Optional
 import uuid
 
 from ..database import get_db
-from ..models.product import Product, Grade
+from ..models.product import Product, GradeEnum
 from ..schemas.product import ProductCreate, ProductUpdate, ProductResponse
 from ..services.file_service import file_service
 from ..utils.dependencies import get_current_admin_user
@@ -19,7 +19,7 @@ async def get_products(
         page: int = Query(1, ge=1, description="Номер страницы"),
         limit: int = Query(10, ge=1, le=50, description="Количество товаров на странице"),
         search: Optional[str] = Query(None, description="Поиск по названию"),
-        grade: Optional[Grade] = Query(None, description="Фильтр по грейду"),
+        grade: Optional[GradeEnum] = Query(None, description="Фильтр по грейду"),
         manufacturer: Optional[str] = Query(None, description="Фильтр по производителю"),
         series: Optional[str] = Query(None, description="Фильтр по серии"),
         min_price: Optional[float] = Query(None, ge=0, description="Минимальная цена"),
@@ -159,7 +159,7 @@ async def create_product(
         name: str = Form(...),
         description: str = Form(...),
         price: float = Form(..., ge=0),
-        grade: Grade = Form(...),
+        grade: GradeEnum = Form(...),
         manufacturer: str = Form(...),
         series: str = Form(...),
         scale: str = Form(...),
@@ -208,7 +208,7 @@ async def update_product(
         name: Optional[str] = Form(None),
         description: Optional[str] = Form(None),
         price: Optional[float] = Form(None, ge=0),
-        grade: Optional[Grade] = Form(None),
+        grade: Optional[GradeEnum] = Form(None),
         manufacturer: Optional[str] = Form(None),
         series: Optional[str] = Form(None),
         scale: Optional[str] = Form(None),

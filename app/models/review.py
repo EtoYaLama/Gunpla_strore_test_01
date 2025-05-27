@@ -1,49 +1,41 @@
-from sqlalchemy import Column, Integer, Text, JSON, ForeignKey
+from sqlalchemy import Column, Integer, Text, JSON, ForeignKey, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-from app.models.base import BaseModel
+from app.models import BaseModel
 
 
+''' Таблица отзывов пользователей на товары '''
 class Review(BaseModel):
     __tablename__ = "reviews"
 
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    product_id = Column(UUID(as_uuid=True), ForeignKey("products.id"), nullable=False)
-    rating = Column(Integer, nullable=False)  # 1-5 звезд
-    comment = Column(Text, nullable=True)
-    images = Column(JSON, nullable=True)  # Массив путей к фото отзыва
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False) # ID пользователя
+    product_id = Column(UUID(as_uuid=True), ForeignKey("products.id"), nullable=False) # ID продукта
+    rating = Column(Integer, nullable=False)  # Рейтинг товара (1-5)
+    comment = Column(Text, nullable=True) # Комментарии к товару
+    images = Column(JSON, nullable=True)  # JSON-структура с массива путей к изображениям
 
-    # Связи
+    ''' Создаем связь между таблицами User, Product '''
     user = relationship("User", back_populates="reviews")
     product = relationship("Product", back_populates="reviews")
 
+
+    ''' Пример отображения объекта '''
     def __repr__(self):
         return f"<Review(user_id='{self.user_id}', rating={self.rating})>"
 
+''' Таблица оценки отзывов '''
+class ReviewHelpful(BaseModel):
+    __tablename__ = "review_helpfuls"
 
-class ViewHistory(BaseModel):
-    __tablename__ = "view_history"
+    review_id = Column(UUID(as_uuid=True), ForeignKey("reviews.id"), nullable=False) # ID отзыва
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False) # ID пользователя
+    helpful = Column(Boolean, nullable=False)  # True, если отзыв был полезным, иначе False
 
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    product_id = Column(UUID(as_uuid=True), ForeignKey("products.id"), nullable=False)
+    ''' Создаем связь между таблицами Review, User '''
+    review = relationship("Review", back_populates="helpful_votes")
+    user = relationship("User", back_populates="helpful_reviews")
 
-    # Связи
-    user = relationship("User", back_populates="view_history")
-    product = relationship("Product", back_populates="view_history")
 
+    ''' Пример отображения объекта '''
     def __repr__(self):
-        return f"<ViewHistory(user_id='{self.user_id}', product_id='{self.product_id}')>"
-
-
-class Favorite(BaseModel):
-    __tablename__ = "favorites"
-
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    product_id = Column(UUID(as_uuid=True), ForeignKey("products.id"), nullable=False)
-
-    # Связи
-    user = relationship("User", back_populates="favorites")
-    product = relationship("Product", back_populates="favorites")
-
-    def __repr__(self):
-        return f"<Favorite(user_id='{self.user_id}', product_id='{self.product_id}')>"
+        return f"<ReviewHelpful(review_id='{self.review_id}', user_id='{self.user_id}', helpful={self.helpful})>"

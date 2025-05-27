@@ -1,9 +1,10 @@
 from sqlalchemy import Column, String, Text, DECIMAL, Integer, JSON, Enum
 from sqlalchemy.orm import relationship
-from app.models.base import BaseModel
+from app.models import BaseModel
 import enum
 
 
+''' Таблица видов (Grade) модельки '''
 class GradeEnum(enum.Enum):
     HG = "HG"  # High Grade 1/144
     RG = "RG"  # Real Grade 1/144
@@ -13,48 +14,54 @@ class GradeEnum(enum.Enum):
     PG = "PG"  # Perfect Grade 1/60
 
 
+''' Таблица продукта '''
 class Product(BaseModel):
     __tablename__ = "products"
 
-    name = Column(String(200), nullable=False, index=True)
-    description = Column(Text, nullable=True)
-    price = Column(DECIMAL(10, 2), nullable=False)
-    grade = Column(Enum(GradeEnum), nullable=False, index=True)
-    manufacturer = Column(String(100), nullable=False, index=True)  # Bandai, Kotobukiya
-    series = Column(String(100), nullable=True, index=True)  # Mobile Suit Gundam, Evangelion
-    scale = Column(String(20), nullable=True)  # 1/144, 1/100, 1/60
-    difficulty = Column(Integer, nullable=True)  # 1-5 звезд сложности
-    in_stock = Column(Integer, default=0, nullable=False)
+    name = Column(String(200), nullable=False, index=True) # Название продукта
+    description = Column(Text, nullable=True) # Описание продукта
+    price = Column(DECIMAL(10, 2), nullable=False) # Цена продукта
+    grade = Column(Enum(GradeEnum), nullable=False, index=True) # Grade продукта
+    manufacturer = Column(String(100), nullable=False, index=True)  # Производитель продукта
+    series = Column(String(100), nullable=True, index=True)  # Серия продукта
+    scale = Column(String(20), nullable=True)  # Масштаб продукта
+    difficulty = Column(Integer, nullable=True)  # Сложность сборки
+    in_stock = Column(Integer, default=0, nullable=False) # Количество товара на скаде
 
-    # Изображения
-    main_image = Column(String(255), nullable=True)
-    additional_images = Column(JSON, nullable=True)  # Массив путей к доп. фото
+    ''' Изображения '''
+    main_image = Column(String(255), nullable=True) # Ссылка на основное изображение
+    additional_images = Column(JSON, nullable=True) # JSON-структура с массивом дополнительных изображений
 
-    # Рейтинг (вычисляемые поля)
-    average_rating = Column(DECIMAL(3, 2), default=0.0)
-    total_reviews = Column(Integer, default=0)
+    ''' Поля рейтинга '''
+    average_rating = Column(DECIMAL(3, 2), default=0.0) # Средний рейтинг
+    total_reviews = Column(Integer, default=0) # Общее количество отзывов
 
-    # Связи
+    ''' Создаем связь между таблицами OrderItem, Cart, Review, ViewHistory, Favorite '''
     order_items = relationship("OrderItem", back_populates="product")
     cart_items = relationship("Cart", back_populates="product")
     reviews = relationship("Review", back_populates="product")
     view_history = relationship("ViewHistory", back_populates="product")
     favorites = relationship("Favorite", back_populates="product")
 
+
+    ''' Пример отображения объекта '''
     def __repr__(self):
         return f"<Product(name='{self.name}', grade='{self.grade.value}')>"
 
+
+    ''' Проверка на наличие на складе '''
     @property
     def is_in_stock(self):
-        """Проверка наличия на складе"""
         return self.in_stock > 0
 
+
+    ''' Количество звезд для отображения (1-5) '''
     @property
     def rating_stars(self):
-        """Количество звезд для отображения (1-5)"""
         return round(float(self.average_rating or 0))
 
+
+    ''' Отформатированная цена '''
     @property
     def formatted_price(self):
-        """Отформатированная цена"""
         return f"{self.price:,.0f}".replace(",", " ")
