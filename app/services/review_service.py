@@ -1,16 +1,13 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, or_
-from typing import List, Optional, Tuple
+from sqlalchemy import func, and_
+from typing import List, Optional, Type, Any, Coroutine
 from fastapi import HTTPException, UploadFile
 import uuid
 import os
 from PIL import Image
 import aiofiles
 
-from ..models.review import Review, ReviewHelpful
-from ..models.product import Product
-from ..models.user import User
-from ..schemas import review as review_schemas
+from app.models import Product, Review, ReviewHelpful
 
 
 class ReviewService:
@@ -21,7 +18,7 @@ class ReviewService:
             review_data: review_schemas.ReviewCreate,
             user_id: uuid.UUID
     ) -> Review:
-        """Создание нового отзыва"""
+        """ Создание нового отзыва """
 
         # Проверяем, не оставлял ли пользователь уже отзыв на этот товар
         existing_review = db.query(Review).filter(
@@ -34,10 +31,11 @@ class ReviewService:
                 detail="Вы уже оставили отзыв на этот товар"
             )
 
-        # Проверяем существование товара
-        product = db.query(Product).filter(review_data.product_id == Product.id).first()
+        ''' Проверяем существование товара '''
+        product = db.query(Product).filter(and_(review_data.product_id == Product.id)).first()
+
         if not product:
-            raise HTTPException(status_code=404, detail="Товар не найден")
+            raise HTTPException(status_code=404, detail='Товар не найден')
 
         review = Review(
             user_id=user_id,
@@ -50,7 +48,7 @@ class ReviewService:
         db.commit()
         db.refresh(review)
 
-        # Обновляем рейтинг товара
+        ''' Обновляем рейтинг товара '''
         await ReviewService.update_product_rating(db, review_data.product_id)
 
         return review
@@ -64,12 +62,12 @@ class ReviewService:
             limit: int = 20,
             rating_filter: Optional[int] = None,
             only_approved: bool = True
-    ) -> Tuple[List[Review], int]:
+    ) -> tuple[int, list[Type[Review]]]:
         """Получение списка отзывов с фильтрами"""
 
         query = db.query(Review)
 
-        # Фильтры
+        ''' Фильтры '''
         if product_id:
             query = query.filter(product_id == Review.product_id)
 
@@ -82,27 +80,27 @@ class ReviewService:
         if only_approved:
             query = query.filter(and_(Review.is_approved == True, Review.is_hidden == False))
 
-        # Подсчет общего количества
+        ''' Подсчет общего количества '''
         total = query.count()
 
-        # Получение отзывов с пагинацией
+        ''' Получение отзывов с пагинацией '''
         reviews = query.order_by(Review.created_at.desc()).offset(skip).limit(limit).all()
 
-        return reviews, total
+        return total, reviews
 
     @staticmethod
     async def get_review_by_id(
             db: Session,
             review_id: uuid.UUID,
             current_user_id: Optional[uuid.UUID] = None
-    ) -> Review:
-        """Получение отзыва по ID с дополнительной информацией"""
+    ) -> Type[Review]:
+        """ Получение отзыва по ID с дополнительной информацией """
 
         review = db.query(Review).filter(review_id == Review.id).first()
         if not review:
-            raise HTTPException(status_code=404, detail="Отзыв не найден")
+            raise HTTPException(status_code=404, detail='Отзыв не найден')
 
-        # Добавляем информацию о голосах за полезность
+        ''' Добавляем информацию о голосах за полезность '''
         if current_user_id:
             helpful_vote = db.query(ReviewHelpful).filter(
                 and_(
@@ -112,7 +110,7 @@ class ReviewService:
             ).first()
             review.user_helpful_vote = helpful_vote.is_helpful if helpful_vote else None
 
-        # Подсчитываем голоса за полезность
+        ''' Подсчитываем голоса за полезность '''
         helpful_stats = db.query(
             func.sum(func.case([(ReviewHelpful.is_helpful == True, 1)], else_=0)).label('helpful'),
             func.sum(func.case([(ReviewHelpful.is_helpful == False, 1)], else_=0)).label('not_helpful')
@@ -130,24 +128,24 @@ class ReviewService:
             review_data: review_schemas.ReviewUpdate,
             user_id: uuid.UUID,
             is_admin: bool = False
-    ) -> Review:
-        """Обновление отзыва"""
+    ) -> Type[Review]:
+        """ Обновление отзыва """
 
         review = db.query(Review).filter(review_id == Review.id).first()
         if not review:
-            raise HTTPException(status_code=404, detail="Отзыв не найден")
+            raise HTTPException(status_code=404, detail='Отзыв не найден')
 
-        # Проверяем права на редактирование
+        ''' Проверяем права на редактирование '''
         if not is_admin and review.user_id != user_id:
             raise HTTPException(
                 status_code=403,
-                detail="Нет прав на редактирование этого отзыва"
+                detail='Нет прав на редактирование этого отзыва'
             )
 
-        # Обновляем поля
+        ''' Обновляем поля '''
         update_data = review_data.dict(exclude_unset=True)
 
-        # Обычные пользователи могут менять только rating и comment
+        ''' Обычные пользователи могут менять только rating и comment '''
         if not is_admin:
             update_data = {k: v for k, v in update_data.items() if k in ['rating', 'comment']}
 
@@ -157,7 +155,7 @@ class ReviewService:
         db.commit()
         db.refresh(review)
 
-        # Обновляем рейтинг товара если изменился rating
+        ''' Обновляем рейтинг товара если изменился rating '''
         if 'rating' in update_data:
             await ReviewService.update_product_rating(db, review.product_id)
 
@@ -170,34 +168,34 @@ class ReviewService:
             user_id: uuid.UUID,
             is_admin: bool = False
     ) -> bool:
-        """Удаление отзыва"""
+        """ Удаление отзыва """
 
         review = db.query(Review).filter(review_id == Review.id).first()
         if not review:
-            raise HTTPException(status_code=404, detail="Отзыв не найден")
+            raise HTTPException(status_code=404, detail='Отзыв не найден')
 
-        # Проверяем права на удаление
+        ''' Проверяем права на удаление '''
         if not is_admin and review.user_id != user_id:
             raise HTTPException(
                 status_code=403,
-                detail="Нет прав на удаление этого отзыва"
+                detail='Нет прав на удаление этого отзыва'
             )
 
         product_id = review.product_id
 
-        # Удаляем изображения
+        ''' Удаляем изображения '''
         if review.images:
             for image_path in review.images:
                 try:
-                    if os.path.exists(f"static/{image_path}"):
-                        os.remove(f"static/{image_path}")
+                    if os.path.exists(f'static/{image_path}'):
+                        os.remove(f'static/{image_path}')
                 except Exception:
                     pass
 
         db.delete(review)
         db.commit()
 
-        # Обновляем рейтинг товара
+        ''' Обновляем рейтинг товара '''
         await ReviewService.update_product_rating(db, product_id)
 
         return True
@@ -208,25 +206,25 @@ class ReviewService:
             review_id: uuid.UUID,
             images: List[UploadFile],
             user_id: uuid.UUID
-    ) -> Review:
-        """Добавление изображений к отзыву"""
+    ) -> Type[Review]:
+        """ Добавление изображений к отзыву """
 
         review = db.query(Review).filter(review_id == Review.id).first()
         if not review:
-            raise HTTPException(status_code=404, detail="Отзыв не найден")
+            raise HTTPException(status_code=404, detail='Отзыв не найден')
 
         if review.user_id != user_id:
             raise HTTPException(
                 status_code=403,
-                detail="Нет прав на редактирование этого отзыва"
+                detail='Нет прав на редактирование этого отзыва'
             )
 
-        # Проверяем лимит изображений (максимум 5)
+        ''' Проверяем лимит изображений (максимум 5) '''
         current_images = review.images or []
         if len(current_images) + len(images) > 5:
             raise HTTPException(
                 status_code=400,
-                detail="Максимум 5 изображений на отзыв"
+                detail='Максимум 5 изображений на отзыв'
             )
 
         new_images = []
@@ -234,38 +232,38 @@ class ReviewService:
         os.makedirs(upload_dir, exist_ok=True)
 
         for image in images:
-            # Проверяем тип файла
+            ''' Проверяем тип файла '''
             if not image.content_type.startswith('image/'):
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Файл {image.filename} не является изображением"
+                    detail=f'Файл {image.filename} не является изображением'
                 )
 
-            # Генерируем уникальное имя файла
+            ''' Генерируем уникальное имя файла '''
             file_extension = image.filename.split('.')[-1].lower()
-            filename = f"{uuid.uuid4()}.{file_extension}"
-            file_path = f"{upload_dir}/{filename}"
+            filename = f'{uuid.uuid4()}.{file_extension}'
+            file_path = f'{upload_dir}/{filename}'
 
-            # Сохраняем файл
+            ''' Сохраняем файл '''
             async with aiofiles.open(file_path, 'wb') as f:
                 content = await image.read()
                 await f.write(content)
 
-            # Сжимаем изображение
+            ''' Сжимаем изображение '''
             try:
                 with Image.open(file_path) as img:
                     # Конвертируем в RGB если нужно
                     if img.mode in ('RGBA', 'LA', 'P'):
                         img = img.convert('RGB')
 
-                    # Ресайзим если слишком большое
+                    ''' Ресайзим если слишком большое '''
                     max_size = (800, 600)
                     img.thumbnail(max_size, Image.Resampling.LANCZOS)
 
-                    # Сохраняем с оптимизацией
+                    ''' Сохраняем с оптимизацией '''
                     img.save(file_path, optimize=True, quality=85)
-            except Exception as e:
-                # Удаляем файл если не удалось обработать
+            except Exception:
+                ''' Удаляем файл если не удалось обработать '''
                 if os.path.exists(file_path):
                     os.remove(file_path)
                 raise HTTPException(
@@ -273,9 +271,9 @@ class ReviewService:
                     detail=f"Ошибка обработки изображения {image.filename}"
                 )
 
-            new_images.append(f"uploads/reviews/{review_id}/{filename}")
+            new_images.append(f'uploads/reviews/{review_id}/{filename}')
 
-        # Обновляем список изображений в отзыве
+        ''' Обновляем список изображений в отзыве '''
         review.images = current_images + new_images
         db.commit()
         db.refresh(review)
@@ -288,13 +286,13 @@ class ReviewService:
             review_id: uuid.UUID,
             user_id: uuid.UUID,
             is_helpful: bool
-    ) -> ReviewHelpful:
-        """Голосование за полезность отзыва"""
+    ) -> Type[ReviewHelpful] | ReviewHelpful:
+        """ Голосование за полезность отзыва """
 
-        # Проверяем существование отзыва
+        ''' Проверяем существование отзыва '''
         review = db.query(Review).filter(review_id == Review.id).first()
         if not review:
-            raise HTTPException(status_code=404, detail="Отзыв не найден")
+            raise HTTPException(status_code=404, detail='Отзыв не найден')
 
         # Проверяем, не голосовал ли пользователь уже
         existing_vote = db.query(ReviewHelpful).filter(
@@ -305,13 +303,13 @@ class ReviewService:
         ).first()
 
         if existing_vote:
-            # Обновляем существующий голос
+            ''' Обновляем существующий голос '''
             existing_vote.is_helpful = is_helpful
             db.commit()
             db.refresh(existing_vote)
             return existing_vote
         else:
-            # Создаем новый голос
+            ''' Создаем новый голос '''
             vote = ReviewHelpful(
                 review_id=review_id,
                 user_id=user_id,
@@ -324,9 +322,9 @@ class ReviewService:
 
     @staticmethod
     async def get_review_stats(db: Session, product_id: uuid.UUID) -> review_schemas.ReviewStats:
-        """Получение статистики отзывов для товара"""
+        """ Получение статистики отзывов для товара """
 
-        # Получаем все одобренные отзывы товара
+        ''' Получаем все одобренные отзывы товара '''
         reviews = db.query(Review).filter(
             and_(
                 Review.product_id == product_id,
@@ -342,12 +340,12 @@ class ReviewService:
                 rating_distribution={1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
             )
 
-        # Подсчитываем статистику
+        ''' Подсчитываем статистику '''
         total_reviews = len(reviews)
         total_rating = sum(review.rating for review in reviews)
         average_rating = round(total_rating / total_reviews, 1)
 
-        # Распределение по рейтингам
+        ''' Распределение по рейтингам '''
         rating_distribution = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
         for review in reviews:
             rating_distribution[review.rating] += 1
@@ -360,11 +358,11 @@ class ReviewService:
 
     @staticmethod
     async def update_product_rating(db: Session, product_id: uuid.UUID):
-        """Обновление рейтинга товара"""
+        """ Обновление рейтинга товара """
 
         stats = await ReviewService.get_review_stats(db, product_id)
 
-        # Обновляем поля в товаре
+        ''' Обновляем поля в товаре '''
         product = db.query(Product).filter(product_id == Product.id).first()
         if product:
             product.average_rating = stats.average_rating
