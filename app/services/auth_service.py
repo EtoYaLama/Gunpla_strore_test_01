@@ -5,6 +5,8 @@ from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 from app.config import settings
 from app.models import User
+from pydantic import EmailStr
+
 
 ''' Контекст для хеширования паролей '''
 pwd_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
@@ -52,7 +54,7 @@ class AuthService:
 
     ''' Аутентификация пользователя '''
     @staticmethod
-    def authenticate_user(db: Session, email: str, password: str) -> Type[User] | None:
+    def authenticate_user(db: Session, email: Str, password: str) -> Type[User] | None:
         user = db.query(User).filter(and_(User.email == email)).first()
         if not user:
             return None
