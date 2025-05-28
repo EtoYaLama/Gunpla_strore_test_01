@@ -4,10 +4,11 @@ from typing import List, Optional, Tuple
 from datetime import datetime, timedelta
 import uuid
 from app.models import ViewHistory, Favorites
+from app.schemas import FavoritesToggleResponse
 
 class HistoryService:
     @staticmethod
-    def add_view_history(db: Session, user_id: uuid.UUID, product_id: uuid.UUID) -> Optional[ViewHistory(BaseIdMixin)]:
+    def add_view_history(db: Session, user_id: uuid.UUID, product_id: uuid.UUID) -> Optional[ViewHistory]:
         """
         Добавляет запись о просмотре товара.
         Если товар уже просматривался в течение последних 10 минут - не добавляем дубликат.

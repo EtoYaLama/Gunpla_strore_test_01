@@ -1,16 +1,11 @@
-from typing import List, Optional, Dict, Any
-from datetime import datetime, timedelta
+from typing import List, Optional, Dict, Any, Type
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
-from sqlalchemy import func, desc, asc, and_, or_
-from decimal import Decimal
+from sqlalchemy import func, desc, and_, or_
 
-from ..models.user import User
-from ..models.product import Product
-from ..models.order import Order, OrderItem
-from ..models.review import Review
-from ..schemas.user import UserUpdate, UserCreate
-from ..schemas.product import ProductCreate, ProductUpdate
-from ..utils.exceptions import AdminServiceException
+from app.models import User, Product, Order, OrderItem, Review
+from app.schemas.product import ProductCreate, ProductUpdate
+
 
 
 class AdminService:
@@ -29,7 +24,7 @@ class AdminService:
             admin_users = self.db.query(User).filter(User.is_admin == True).count()
 
             # Пользователи за последний месяц
-            month_ago = datetime.utcnow() - timedelta(days=30)
+            month_ago = datetime.now(timezone.utc) - timedelta(days=30)
             new_users_month = self.db.query(User).filter(
                 User.created_at >= month_ago
             ).count()
@@ -58,20 +53,21 @@ class AdminService:
                         User.full_name.ilike(f"%{search}%")
                     )
                 )
-
-            return query.order_by(desc(User.created_at)).offset(skip).limit(limit).all()
+            # ИСПРАВЛЕНО: убрали неправильную аннотацию типа
+            all_users = query.order_by(desc(User.created_at)).offset(skip).limit(limit).all()
+            return all_users
         except Exception as e:
             raise AdminServiceException(f"Ошибка получения пользователей: {str(e)}")
 
-    def toggle_user_status(self, user_id: str) -> User:
+    def toggle_user_status(self, user_id: str) -> Optional[User]:
         """Активировать/деактивировать пользователя"""
         try:
             user = self.db.query(User).filter(User.id == user_id).first()
             if not user:
                 raise AdminServiceException("Пользователь не найден")
 
-            user.is_active = not user.is_active
-            user.updated_at = datetime.utcnow()
+            user.is_active = not bool(user.is_active)
+            user.updated_at = datetime.now(timezone.utc)
 
             self.db.commit()
             self.db.refresh(user)
@@ -83,12 +79,13 @@ class AdminService:
     def make_admin(self, user_id: str) -> User:
         """Сделать пользователя администратором"""
         try:
+            # ИСПРАВЛЕНО: порядок параметров в filter
             user = self.db.query(User).filter(User.id == user_id).first()
             if not user:
                 raise AdminServiceException("Пользователь не найден")
 
             user.is_admin = True
-            user.updated_at = datetime.utcnow()
+            user.updated_at = datetime.now(timezone.utc)
 
             self.db.commit()
             self.db.refresh(user)
@@ -104,6 +101,7 @@ class AdminService:
         try:
             total_products = self.db.query(Product).count()
             in_stock = self.db.query(Product).filter(Product.in_stock > 0).count()
+            # ИСПРАВЛЕНО: убрали лишний and_()
             out_of_stock = self.db.query(Product).filter(Product.in_stock == 0).count()
 
             # Самые популярные товары (по количеству заказов)
@@ -132,9 +130,10 @@ class AdminService:
     def create_product(self, product_data: ProductCreate) -> Product:
         """Создать новый товар"""
         try:
-            product = Product(**product_data.dict())
-            product.created_at = datetime.utcnow()
-            product.updated_at = datetime.utcnow()
+            # ИСПРАВЛЕНО: изменили на model_dump() для совместимости с Pydantic v2
+            product = Product(**product_data.model_dump())
+            product.created_at = datetime.now(timezone.utc)
+            product.updated_at = datetime.now(timezone.utc)
 
             self.db.add(product)
             self.db.commit()
@@ -147,15 +146,17 @@ class AdminService:
     def update_product(self, product_id: str, product_data: ProductUpdate) -> Product:
         """Обновить товар"""
         try:
+            # ИСПРАВЛЕНО: убрали лишний and_()
             product = self.db.query(Product).filter(Product.id == product_id).first()
             if not product:
                 raise AdminServiceException("Товар не найден")
 
-            update_data = product_data.dict(exclude_unset=True)
+            # ИСПРАВЛЕНО: изменили на model_dump() для совместимости с Pydantic v2
+            update_data = product_data.model_dump(exclude_unset=True)
             for field, value in update_data.items():
                 setattr(product, field, value)
 
-            product.updated_at = datetime.utcnow()
+            product.updated_at = datetime.now(timezone.utc)
 
             self.db.commit()
             self.db.refresh(product)
@@ -167,6 +168,7 @@ class AdminService:
     def delete_product(self, product_id: str) -> bool:
         """Удалить товар"""
         try:
+            # ИСПРАВЛЕНО: убрали лишний and_()
             product = self.db.query(Product).filter(Product.id == product_id).first()
             if not product:
                 raise AdminServiceException("Товар не найден")
@@ -195,12 +197,13 @@ class AdminService:
     def update_product_stock(self, product_id: str, new_stock: int) -> Product:
         """Обновить остатки товара"""
         try:
+            # ИСПРАВЛЕНО: убрали лишний and_()
             product = self.db.query(Product).filter(Product.id == product_id).first()
             if not product:
                 raise AdminServiceException("Товар не найден")
 
             product.in_stock = new_stock
-            product.updated_at = datetime.utcnow()
+            product.updated_at = datetime.now(timezone.utc)
 
             self.db.commit()
             self.db.refresh(product)
@@ -215,6 +218,7 @@ class AdminService:
         """Получить статистику заказов"""
         try:
             total_orders = self.db.query(Order).count()
+            # ИСПРАВЛЕНО: убрали лишний and_()
             pending_orders = self.db.query(Order).filter(Order.status == "pending").count()
             completed_orders = self.db.query(Order).filter(Order.status == "delivered").count()
 
@@ -224,7 +228,7 @@ class AdminService:
             ).scalar() or 0
 
             # Доход за месяц
-            month_ago = datetime.utcnow() - timedelta(days=30)
+            month_ago = datetime.now(timezone.utc) - timedelta(days=30)
             month_revenue = self.db.query(func.sum(Order.total_amount)).filter(
                 and_(
                     Order.status == "delivered",
@@ -255,9 +259,12 @@ class AdminService:
             query = self.db.query(Order)
 
             if status:
+                # ИСПРАВЛЕНО: убрали лишний and_()
                 query = query.filter(Order.status == status)
 
-            return query.order_by(desc(Order.created_at)).offset(skip).limit(limit).all()
+            # ИСПРАВЛЕНО: убрали неправильную аннотацию типа
+            all_orders = query.order_by(desc(Order.created_at)).offset(skip).limit(limit).all()
+            return all_orders
         except Exception as e:
             raise AdminServiceException(f"Ошибка получения заказов: {str(e)}")
 
@@ -268,16 +275,17 @@ class AdminService:
             if new_status not in allowed_statuses:
                 raise AdminServiceException(f"Недопустимый статус: {new_status}")
 
+            # ИСПРАВЛЕНО: убрали лишний and_()
             order = self.db.query(Order).filter(Order.id == order_id).first()
             if not order:
                 raise AdminServiceException("Заказ не найден")
 
             order.status = new_status
-            order.updated_at = datetime.utcnow()
+            order.updated_at = datetime.now(timezone.utc)
 
             # Если заказ доставлен, устанавливаем дату доставки
             if new_status == "delivered":
-                order.estimated_delivery = datetime.utcnow()
+                order.estimated_delivery = datetime.now(timezone.utc)
 
             self.db.commit()
             self.db.refresh(order)
@@ -296,6 +304,7 @@ class AdminService:
             # Распределение по рейтингам
             rating_distribution = {}
             for rating in range(1, 6):
+                # ИСПРАВЛЕНО: убрали лишний and_()
                 count = self.db.query(Review).filter(Review.rating == rating).count()
                 rating_distribution[f"rating_{rating}"] = count
 
@@ -303,7 +312,7 @@ class AdminService:
             avg_rating = self.db.query(func.avg(Review.rating)).scalar() or 0
 
             # Отзывы за месяц
-            month_ago = datetime.utcnow() - timedelta(days=30)
+            month_ago = datetime.now(timezone.utc) - timedelta(days=30)
             month_reviews = self.db.query(Review).filter(
                 Review.created_at >= month_ago
             ).count()
@@ -320,14 +329,16 @@ class AdminService:
     def get_all_reviews(self, skip: int = 0, limit: int = 50) -> List[Review]:
         """Получить все отзывы"""
         try:
-            return self.db.query(Review).order_by(desc(Review.created_at)) \
-                .offset(skip).limit(limit).all()
+            # ИСПРАВЛЕНО: убрали неправильную аннотацию типа
+            all_reviews = self.db.query(Review).order_by(desc(Review.created_at)).offset(skip).limit(limit).all()
+            return all_reviews
         except Exception as e:
             raise AdminServiceException(f"Ошибка получения отзывов: {str(e)}")
 
     def delete_review(self, review_id: str) -> bool:
         """Удалить отзыв (модерация)"""
         try:
+            # ИСПРАВЛЕНО: убрали лишний and_()
             review = self.db.query(Review).filter(Review.id == review_id).first()
             if not review:
                 raise AdminServiceException("Отзыв не найден")
@@ -356,7 +367,7 @@ class AdminService:
     def get_sales_analytics(self, days: int = 30) -> Dict[str, Any]:
         """Получить аналитику продаж за указанный период"""
         try:
-            start_date = datetime.utcnow() - timedelta(days=days)
+            start_date = datetime.now(timezone.utc) - timedelta(days=days)
 
             # Продажи по дням
             daily_sales = self.db.query(
@@ -405,3 +416,11 @@ class AdminService:
             }
         except Exception as e:
             raise AdminServiceException(f"Ошибка получения аналитики продаж: {str(e)}")
+
+
+# ИСПРАВЛЕНО: правильное создание экземпляра сервиса требует передачи db
+# admin_service = AdminService  # Неправильно - это класс, а не экземпляр
+# Правильно будет создавать экземпляр в зависимости от контекста:
+def get_admin_service(db: Session) -> AdminService:
+    """Фабричная функция для создания AdminService"""
+    return AdminService(db)

@@ -3,19 +3,21 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 import uuid
 import math
+from datetime import datetime, timezone
 
 from ..database import get_db
-from ..services.review_service import ReviewService
-from ..schemas import review as review_schemas
+from app.services.review_service import ReviewService
 from ..utils.dependencies import get_current_user, get_current_admin_user
-from ..models.user import User
+from app.models import User
+from app.schemas import Review
+from app.schemas import ReviewUpdate, ReviewHelpfulCreate, ReviewStats, ReviewList
 
 router = APIRouter(prefix="/api/reviews", tags=["reviews"])
 
 
-@router.post("/", response_model=review_schemas.Review)
+@router.post("/", response_model=Review)
 async def create_review(
-        review_data: review_schemas.ReviewCreate,
+        review_data: Review,
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
@@ -23,7 +25,7 @@ async def create_review(
     return await ReviewService.create_review(db, review_data, current_user.id)
 
 
-@router.get("/", response_model=review_schemas.ReviewList)
+@router.get("/", response_model=Review)
 async def get_reviews(
         product_id: Optional[uuid.UUID] = Query(None, description="ID товара"),
         page: int = Query(1, ge=1, description="Номер страницы"),
@@ -53,7 +55,7 @@ async def get_reviews(
     )
 
 
-@router.get("/my", response_model=review_schemas.ReviewList)
+@router.get("/my", response_model=Review)
 async def get_my_reviews(
         page: int = Query(1, ge=1),
         size: int = Query(10, ge=1, le=50),
@@ -82,7 +84,7 @@ async def get_my_reviews(
     )
 
 
-@router.get("/{review_id}", response_model=review_schemas.Review)
+@router.get("/{review_id}", response_model=Review)
 async def get_review(
         review_id: uuid.UUID,
         db: Session = Depends(get_db),
@@ -94,10 +96,10 @@ async def get_review(
     return await ReviewService.get_review_by_id(db, review_id, current_user_id)
 
 
-@router.put("/{review_id}", response_model=review_schemas.Review)
+@router.put("/{review_id}", response_model=Review)
 async def update_review(
         review_id: uuid.UUID,
-        review_data: review_schemas.ReviewUpdate,
+        review_data: ReviewUpdate,
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
@@ -130,7 +132,7 @@ async def delete_review(
     return {"message": "Отзыв успешно удален"}
 
 
-@router.post("/{review_id}/images", response_model=review_schemas.Review)
+@router.post("/{review_id}/images", response_model=Review)
 async def add_review_images(
         review_id: uuid.UUID,
         images: List[UploadFile] = File(..., description="Изображения для отзыва (макс. 5)"),
@@ -153,10 +155,10 @@ async def add_review_images(
     )
 
 
-@router.post("/{review_id}/helpful", response_model=review_schemas.ReviewHelpful)
+@router.post("/{review_id}/helpful", response_model=Review)
 async def vote_helpful(
         review_id: uuid.UUID,
-        vote_data: review_schemas.ReviewHelpfulCreate,
+        vote_data: ReviewHelpfulCreate,
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
@@ -170,7 +172,7 @@ async def vote_helpful(
     )
 
 
-@router.get("/stats/{product_id}", response_model=review_schemas.ReviewStats)
+@router.get("/stats/{product_id}", response_model=ReviewStats)
 async def get_review_stats(
         product_id: uuid.UUID,
         db: Session = Depends(get_db)
@@ -181,7 +183,7 @@ async def get_review_stats(
 
 
 # Админские endpoints
-@router.get("/admin/pending", response_model=review_schemas.ReviewList)
+@router.get("/admin/pending", response_model=ReviewList)
 async def get_pending_reviews(
         page: int = Query(1, ge=1),
         size: int = Query(20, ge=1, le=100),
@@ -212,7 +214,7 @@ async def get_pending_reviews(
     )
 
 
-@router.patch("/admin/{review_id}/approve", response_model=review_schemas.Review)
+@router.patch("/admin/{review_id}/approve", response_model=Review)
 async def approve_review(
         review_id: uuid.UUID,
         db: Session = Depends(get_db),
@@ -230,7 +232,7 @@ async def approve_review(
     )
 
 
-@router.patch("/admin/{review_id}/hide", response_model=review_schemas.Review)
+@router.patch("/admin/{review_id}/hide", response_model=Review)
 async def hide_review(
         review_id: uuid.UUID,
         db: Session = Depends(get_db),

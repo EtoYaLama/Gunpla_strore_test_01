@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
-from typing import List, Optional, Type, Any, Coroutine
+from typing import List, Optional, Type
 from fastapi import HTTPException, UploadFile
 import uuid
 import os
@@ -8,6 +8,7 @@ from PIL import Image
 import aiofiles
 
 from app.models import Product, Review, ReviewHelpful
+from app.schemas.review import ReviewCreate, ReviewUpdate, ReviewStats
 
 
 class ReviewService:
@@ -15,7 +16,7 @@ class ReviewService:
     @staticmethod
     async def create_review(
             db: Session,
-            review_data: review_schemas.ReviewCreate,
+            review_data: 'ReviewCreate',
             user_id: uuid.UUID
     ) -> Review:
         """ Создание нового отзыва """
@@ -125,7 +126,7 @@ class ReviewService:
     async def update_review(
             db: Session,
             review_id: uuid.UUID,
-            review_data: review_schemas.ReviewUpdate,
+            review_data: 'ReviewUpdate',
             user_id: uuid.UUID,
             is_admin: bool = False
     ) -> Type[Review]:
@@ -321,11 +322,11 @@ class ReviewService:
             return vote
 
     @staticmethod
-    async def get_review_stats(db: Session, product_id: uuid.UUID) -> review_schemas.ReviewStats:
+    async def get_review_stats(db: Session, product_id: uuid.UUID) -> ReviewStats:
         """ Получение статистики отзывов для товара """
 
         ''' Получаем все одобренные отзывы товара '''
-        reviews = db.query(Review).filter(
+        reviews = db.query(ReviewStats).filter(
             and_(
                 Review.product_id == product_id,
                 Review.is_approved == True,
@@ -334,7 +335,7 @@ class ReviewService:
         ).all()
 
         if not reviews:
-            return review_schemas.ReviewStats(
+            return Review.ReviewStats(
                 total_reviews=0,
                 average_rating=0.0,
                 rating_distribution={1: 0, 2: 0, 3: 0, 4: 0, 5: 0}

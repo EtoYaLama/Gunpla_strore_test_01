@@ -1,7 +1,8 @@
 from sqlalchemy import Column, DateTime, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import UUID
+import uuid
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 from app.database import Base
 
 

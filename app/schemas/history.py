@@ -1,7 +1,7 @@
 from pydantic import BaseModel, UUID4, Field
 from datetime import datetime
 from typing import Optional, List
-from app.schemas import ProductBase
+from app.schemas.product import ProductBase
 
 
 ''' Модель истории просмотров '''
